@@ -1,0 +1,16 @@
+target/
+.idea/
+*.iml
+
+.mvn/wrapper/maven-wrapper.jar
+
+logs/
+*.log
+
+.env
+
+.DS_Store
+
+node_modules/
+
+out/
