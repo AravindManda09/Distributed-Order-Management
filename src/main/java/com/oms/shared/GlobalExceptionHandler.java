@@ -1,5 +1,6 @@
 package com.oms.shared;
 
+import com.oms.shared.exception.InsufficientStockException;
 import com.oms.shared.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,12 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 HttpStatus.NOT_FOUND
         );
+    }
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<String> handleInsufficientStock(InsufficientStockException ex){
+        return new ResponseEntity<>(
+                ex.getMessage(),
+                HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(Exception.class)
