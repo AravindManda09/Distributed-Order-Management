@@ -319,9 +319,9 @@ http://localhost:8080/swagger-ui.html
 
 ### Inventory
 
-* [ ] Inventory Management
-* [ ] Stock Reservation
-* [ ] Stock Release
+* [x] Inventory Management
+* [x] Stock Reservation
+* [x] Stock Release
 
 ### Orders
 
@@ -373,8 +373,8 @@ This project focuses on gaining practical experience with:
 
 Current Implemented Module:
 
-* Catalog
+* Inventory
 
 Next Module:
 
-* Inventory
+* Order
