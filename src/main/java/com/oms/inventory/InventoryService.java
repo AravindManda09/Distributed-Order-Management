@@ -43,8 +43,10 @@ public class InventoryService {
         inventoryRepository.findByProductId(item.getProductId())
                 .ifPresent(i -> {
                     throw new RuntimeException(
-                            "Inventory already exists");
+                            "Inventory already exists for product "
+                                    + item.getProductId());
                 });
+
         return inventoryRepository.save(item);
     }
 }
