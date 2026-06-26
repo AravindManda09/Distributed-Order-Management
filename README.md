@@ -10,6 +10,7 @@ Current migrations:
 * V2 - Inventory Table
 * V3 - Orders & Order Items Tables
 * V4 - Unique Constraint on Inventory Product
+* V5 - Outbox Events Table
 
 ---
 
@@ -77,6 +78,7 @@ Implemented:
 * OrderItemRepository
 * OrderService
 * OrderController
+* PlaceOrderRequest DTO
 
 Features:
 
@@ -106,7 +108,7 @@ Workflow:
 ```text
 Place Order
       ↓
-Fetch Product
+Validate Product
       ↓
 Reserve Inventory
       ↓
@@ -115,7 +117,48 @@ Calculate Total
 Create Order
       ↓
 Create Order Item
+      ↓
+Create Outbox Event
 ```
+
+---
+
+## Event-Driven Architecture
+
+Implemented:
+
+* Transactional Outbox Pattern
+* Outbox Event Persistence
+* Scheduled Outbox Relay
+* Apache Kafka Integration
+* Kafka Producer
+* JSON Event Publishing
+
+Workflow:
+
+```text
+Order Created
+      ↓
+Outbox Event Stored
+      ↓
+Database Transaction Commits
+      ↓
+Outbox Scheduler
+      ↓
+Kafka Topic (order-created)
+```
+
+---
+
+## Infrastructure
+
+Implemented:
+
+* Docker Compose
+* PostgreSQL 16 (Docker)
+* Apache Kafka
+* Kafka UI
+* Flyway Database Migrations
 
 ---
 
@@ -145,6 +188,7 @@ products
 inventory_items
 orders
 order_items
+outbox_events
 flyway_schema_history
 ```
 
@@ -154,7 +198,6 @@ Planned Tables:
 payments
 shipments
 returns
-outbox_events
 customers
 ```
 
@@ -167,6 +210,7 @@ customers
 * [x] Project Setup
 * [x] PostgreSQL Integration
 * [x] Flyway Integration
+* [x] Docker Integration
 * [x] Catalog Module
 * [x] Inventory Module
 * [x] Order Module
@@ -185,22 +229,25 @@ customers
 * [ ] Order Tracking
 * [ ] Order Cancellation
 
+### Distributed Systems
+
+* [x] Transactional Outbox Pattern
+* [x] Kafka Integration
+* [x] Event Publishing
+* [ ] Kafka Consumers
+* [ ] Saga Pattern
+* [ ] Redis Caching
+
 ### Payments
 
 * [ ] Payment Processing
+* [ ] Payment Consumer
 * [ ] Refund Handling
 
 ### Shipments
 
 * [ ] Shipment Creation
 * [ ] Shipment Tracking
-
-### Distributed Systems
-
-* [ ] Transactional Outbox
-* [ ] Kafka Integration
-* [ ] Saga Pattern
-* [ ] Redis Caching
 
 ### Security
 
@@ -210,7 +257,6 @@ customers
 
 ### Deployment
 
-* [ ] Dockerization
 * [ ] CI/CD Pipeline
 
 ---
@@ -224,6 +270,7 @@ Implemented Modules:
 * Catalog
 * Inventory
 * Order
+* Shared Infrastructure
 
 Current Capability:
 
@@ -235,10 +282,14 @@ Inventory Reserved
 Order Created
         ↓
 Order Item Persisted
+        ↓
+Outbox Event Created
+        ↓
+Kafka Event Published
 ```
 
 Next Milestone:
 
-* Transactional Outbox Pattern
-* Domain Events
-* Kafka Integration
+* Payment Module
+* Kafka Consumer
+* Event-Driven Payment Processing
