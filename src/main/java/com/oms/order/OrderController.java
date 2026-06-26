@@ -1,5 +1,6 @@
 package com.oms.order;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.oms.order.dto.PlaceOrderRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,7 +16,7 @@ public class OrderController {
         private final OrderService orderService;
 
         @PostMapping
-        public Order placeOrder(@RequestBody PlaceOrderRequest request) {
+        public Order placeOrder(@RequestBody PlaceOrderRequest request) throws JsonProcessingException {
             return orderService.placeOrder(request);
         }
 }
