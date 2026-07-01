@@ -31,10 +31,24 @@ public class OutboxRelayScheduler {
 
             try {
 
-                kafkaProducer.publish(
-                        KafkaTopics.ORDER_CREATED,
-                        event.getPayload());
+                String topic;
 
+                switch (event.getEventType()) {
+
+                    case ORDER_CREATED ->
+                            topic = KafkaTopics.ORDER_CREATED;
+
+                    case PAYMENT_COMPLETED ->
+                            topic = KafkaTopics.PAYMENT_EVENTS;
+
+                    case ORDER_CANCELLED ->
+                            topic = KafkaTopics.ORDER_EVENTS;
+
+                    default ->
+                            throw new IllegalStateException(
+                                    "Unexpected event type: " + event.getEventType());
+                }
+                kafkaProducer.publish(topic, event.getPayload());
                 event.setStatus(OutboxEventStatus.SENT);
 
                 outboxEventRepository.save(event);

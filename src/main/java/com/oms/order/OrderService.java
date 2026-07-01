@@ -1,14 +1,13 @@
 package com.oms.order;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oms.catalog.Product;
 import com.oms.catalog.ProductService;
 import com.oms.inventory.InventoryService;
 import com.oms.order.dto.PlaceOrderRequest;
-import com.oms.shared.event.OutboxEvent;
-import com.oms.shared.event.OutboxEventRepository;
-import com.oms.shared.event.OutboxEventStatus;
+import com.oms.shared.event.EventPublisher;
+import com.oms.shared.event.EventType;
+import com.oms.shared.exception.ResourceNotFoundException;
+import com.oms.shared.messaging.events.OrderCancelledEvent;
 import com.oms.shared.messaging.events.OrderCreatedEvent;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +18,6 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
-
 public class OrderService {
 
     private final ProductService productService;
@@ -30,16 +28,22 @@ public class OrderService {
 
     private final OrderItemRepository orderItemRepository;
 
-    private final OutboxEventRepository outboxEventRepository;
-
-    private final ObjectMapper objectMapper;
+    private final EventPublisher eventPublisher;
 
     @Transactional
-    public Order placeOrder(PlaceOrderRequest request) throws JsonProcessingException {
+    public Order placeOrder(PlaceOrderRequest request) {
+
+        // Validate product
         Product product = productService.getProduct(request.productId());
+
+        // Reserve inventory
         inventoryService.reserve(request.productId(), request.quantity());
+
+        // Calculate order amount
         BigDecimal totalAmount = product.getPrice()
                 .multiply(BigDecimal.valueOf(request.quantity()));
+
+        // Create order
         Order order = Order.builder()
                 .status(OrderStatus.PENDING_PAYMENT)
                 .totalAmount(totalAmount)
@@ -47,40 +51,86 @@ public class OrderService {
                 .build();
 
         Order savedOrder = orderRepository.save(order);
-        OrderCreatedEvent event = OrderCreatedEvent.builder()
-                .orderId(savedOrder.getId())
-                .productId(product.getId())
-                .quantity(request.quantity())
-                .totalAmount(totalAmount)
-                .createdAt(LocalDateTime.now())
-                .orderStatus(OrderStatus.PENDING_PAYMENT)
-                .build();
 
-        String payload;
-        try {
-            payload = objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize order event", e);
-        }
-        OutboxEvent outboxEvent = OutboxEvent.builder()
-                .aggregateType("ORDER")
-                .aggregateId(savedOrder.getId())
-                .eventType("ORDER_CREATED")
-                .payload(payload)
-                .status(OutboxEventStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-        outboxEventRepository.save(outboxEvent);
-
-        OrderItem item = OrderItem.builder()
+        // Create order item
+        OrderItem orderItem = OrderItem.builder()
                 .orderId(savedOrder.getId())
                 .productId(product.getId())
                 .quantity(request.quantity())
                 .price(product.getPrice())
                 .build();
-        orderItemRepository.save(item);
+
+        orderItemRepository.save(orderItem);
+
+        // Publish business event
+        OrderCreatedEvent event = OrderCreatedEvent.builder()
+                .orderId(savedOrder.getId())
+                .productId(product.getId())
+                .quantity(request.quantity())
+                .totalAmount(totalAmount)
+                .orderStatus(savedOrder.getStatus())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        eventPublisher.publish(
+                EventType.ORDER_CREATED,
+                savedOrder.getId(),
+                event
+        );
 
         return savedOrder;
     }
 
+    @Transactional
+    public void confirmOrder(Long orderId) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Order not found with id: " + orderId));
+
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            return;
+        }
+
+        order.setStatus(OrderStatus.CONFIRMED);
+    }
+
+    @Transactional
+    public void cancelOrder(Long orderId) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Order not found with id: " + orderId));
+
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            return;
+        }
+
+        if (order.getStatus() == OrderStatus.CONFIRMED) {
+            throw new IllegalStateException(
+                    "Cannot cancel a confirmed order.");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+
+        OrderItem orderItem = orderItemRepository.findByOrderId(orderId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Order item not found for order: " + orderId));
+
+        OrderCancelledEvent event = OrderCancelledEvent.builder()
+                .orderId(orderId)
+                .productId(orderItem.getProductId())
+                .quantity(orderItem.getQuantity())
+                .cancelledAt(LocalDateTime.now())
+                .build();
+
+        eventPublisher.publish(
+                EventType.ORDER_CANCELLED,
+                orderId,
+                event
+        );
+    }
 }

@@ -21,7 +21,8 @@ public class OutboxEvent{
 
     private Long aggregateId;
 
-    private String eventType;
+    @Enumerated(EnumType.STRING)
+    private EventType eventType;
 
     @Column(columnDefinition = "TEXT")
     private String payload;

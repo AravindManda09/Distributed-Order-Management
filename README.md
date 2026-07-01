@@ -11,6 +11,7 @@ Current migrations:
 * V3 - Orders & Order Items Tables
 * V4 - Unique Constraint on Inventory Product
 * V5 - Outbox Events Table
+* V6 - Payments Table
 
 ---
 
@@ -42,6 +43,7 @@ Implemented:
 * InventoryItem Entity
 * InventoryRepository
 * InventoryService
+* InventoryConsumer
 * InventoryController
 
 Features:
@@ -50,8 +52,8 @@ Features:
 * Inventory Retrieval
 * Stock Reservation
 * Stock Release
-* Availability Validation
 * Duplicate Inventory Prevention
+* Inventory Compensation on Order Cancellation
 
 Endpoints:
 
@@ -78,14 +80,16 @@ Implemented:
 * OrderItemRepository
 * OrderService
 * OrderController
+* OrderEventConsumer
 * PlaceOrderRequest DTO
 
 Features:
 
 * Order Placement
+* Order Confirmation
+* Order Cancellation (Payment Failure)
 * Order Item Persistence
-* Total Amount Calculation
-* Inventory Reservation During Order Placement
+* Inventory Reservation
 * Transactional Order Workflow
 
 Endpoints:
@@ -103,22 +107,34 @@ Example Request:
 }
 ```
 
+---
+
+## Payment Module
+
+Implemented:
+
+* Payment Entity
+* PaymentRepository
+* PaymentService
+* PaymentConsumer
+* PaymentStatus Enum
+
+Features:
+
+* Event-Driven Payment Processing
+* Random Payment Success / Failure Simulation
+* Payment Event Publishing
+
 Workflow:
 
 ```text
-Place Order
+ORDER_CREATED
       ↓
-Validate Product
+Payment Consumer
       ↓
-Reserve Inventory
+Process Payment
       ↓
-Calculate Total
-      ↓
-Create Order
-      ↓
-Create Order Item
-      ↓
-Create Outbox Event
+PAYMENT_COMPLETED
 ```
 
 ---
@@ -128,24 +144,70 @@ Create Outbox Event
 Implemented:
 
 * Transactional Outbox Pattern
-* Outbox Event Persistence
+* Event Publisher Abstraction
 * Scheduled Outbox Relay
 * Apache Kafka Integration
 * Kafka Producer
-* JSON Event Publishing
+* Kafka Consumers
+* JSON Event Serialization
+* Domain Events
 
-Workflow:
+Current Events:
+
+* ORDER_CREATED
+* PAYMENT_COMPLETED
+* ORDER_CANCELLED
+
+Kafka Topics:
+
+* order-created
+* payment-events
+* order-events
+
+---
+
+## Saga Pattern (Choreography)
+
+Implemented:
+
+* Payment Success Workflow
+* Payment Failure Compensation
+* Event-Driven Inventory Compensation
+
+Success Flow:
 
 ```text
-Order Created
-      ↓
-Outbox Event Stored
-      ↓
-Database Transaction Commits
-      ↓
-Outbox Scheduler
-      ↓
-Kafka Topic (order-created)
+Customer Places Order
+        ↓
+Reserve Inventory
+        ↓
+ORDER_CREATED
+        ↓
+Payment Processed
+        ↓
+PAYMENT_COMPLETED (SUCCESS)
+        ↓
+Order Confirmed
+```
+
+Failure Flow:
+
+```text
+Customer Places Order
+        ↓
+Reserve Inventory
+        ↓
+ORDER_CREATED
+        ↓
+Payment Processed
+        ↓
+PAYMENT_COMPLETED (FAILED)
+        ↓
+Order Cancelled
+        ↓
+ORDER_CANCELLED
+        ↓
+Inventory Released
 ```
 
 ---
@@ -155,7 +217,7 @@ Kafka Topic (order-created)
 Implemented:
 
 * Docker Compose
-* PostgreSQL 16 (Docker)
+* PostgreSQL
 * Apache Kafka
 * Kafka UI
 * Flyway Database Migrations
@@ -175,89 +237,121 @@ HTTP Status Mapping:
 * 404 Not Found
 * 409 Conflict
 
-Provides centralized exception handling across the application.
-
 ---
 
 # Database
 
-Current Tables:
+Current Tables
 
 ```text
 products
 inventory_items
 orders
 order_items
+payments
 outbox_events
 flyway_schema_history
 ```
 
-Planned Tables:
+---
+
+# Architecture
 
 ```text
-payments
-shipments
-returns
-customers
+Client
+   │
+   ▼
+Order Module
+   │
+   ▼
+Transactional Outbox
+   │
+   ▼
+Outbox Scheduler
+   │
+   ▼
+Kafka
+   │
+   ├──────────────► Payment Consumer
+   │                    │
+   │                    ▼
+   │             Payment Service
+   │                    │
+   │                    ▼
+   │           PAYMENT_COMPLETED
+   │                    │
+   ▼                    ▼
+Order Consumer ◄────────┘
+   │
+   ├──────────── Success ───────────► Confirm Order
+   │
+   └──────────── Failure ───────────► Cancel Order
+                                         │
+                                         ▼
+                                 ORDER_CANCELLED
+                                         │
+                                         ▼
+                                 Inventory Consumer
+                                         │
+                                         ▼
+                                 Release Inventory
 ```
 
 ---
 
 # Roadmap
 
-### Core Backend
+## Core Backend
 
-* [x] Project Setup
-* [x] PostgreSQL Integration
-* [x] Flyway Integration
-* [x] Docker Integration
-* [x] Catalog Module
-* [x] Inventory Module
-* [x] Order Module
-* [x] Global Exception Handling
+- [x] Project Setup
+- [x] PostgreSQL Integration
+- [x] Flyway Integration
+- [x] Docker Integration
+- [x] Catalog Module
+- [x] Inventory Module
+- [x] Order Module
+- [x] Payment Module
+- [x] Global Exception Handling
 
-### Inventory
+## Distributed Systems
 
-* [x] Inventory Management
-* [x] Stock Reservation
-* [x] Stock Release
-* [x] Duplicate Inventory Prevention
+- [x] Transactional Outbox Pattern
+- [x] Kafka Integration
+- [x] Kafka Producers
+- [x] Kafka Consumers
+- [x] Event Publishing
+- [x] Event-Driven Communication
+- [x] Saga Pattern (Choreography)
+- [x] Eventual Consistency
 
-### Orders
+## Payments
 
-* [x] Order Placement
-* [ ] Order Tracking
-* [ ] Order Cancellation
+- [x] Payment Processing
+- [x] Payment Consumer
+- [ ] Refund Handling
 
-### Distributed Systems
+## Shipments
 
-* [x] Transactional Outbox Pattern
-* [x] Kafka Integration
-* [x] Event Publishing
-* [ ] Kafka Consumers
-* [ ] Saga Pattern
-* [ ] Redis Caching
+- [ ] Shipment Creation
+- [ ] Shipment Tracking
 
-### Payments
+## Returns
 
-* [ ] Payment Processing
-* [ ] Payment Consumer
-* [ ] Refund Handling
+- [ ] Return Processing
 
-### Shipments
+## Performance
 
-* [ ] Shipment Creation
-* [ ] Shipment Tracking
+- [ ] Redis Caching
 
-### Security
+## Security
 
-* [ ] Spring Security
-* [ ] JWT Authentication
-* [ ] Role-Based Authorization
+- [ ] Spring Security
+- [ ] JWT Authentication
+- [ ] Role-Based Authorization
 
-### Deployment
+## Deployment
 
-* [ ] CI/CD Pipeline
+- [ ] CI/CD Pipeline
 
 ---
 
@@ -270,26 +364,36 @@ Implemented Modules:
 * Catalog
 * Inventory
 * Order
+* Payment
 * Shared Infrastructure
 
-Current Capability:
+Current Capability
 
 ```text
 Customer Places Order
         ↓
-Inventory Reserved
+Reserve Inventory
         ↓
-Order Created
+Create Order
         ↓
-Order Item Persisted
+Publish ORDER_CREATED
         ↓
-Outbox Event Created
+Kafka
         ↓
-Kafka Event Published
+Payment Processing
+        ↓
+Publish PAYMENT_COMPLETED
+        ↓
+Confirm / Cancel Order
+        ↓
+Publish ORDER_CANCELLED (Failure Only)
+        ↓
+Release Inventory
 ```
 
-Next Milestone:
+Next Milestone
 
-* Payment Module
-* Kafka Consumer
-* Event-Driven Payment Processing
+* Shipment Module
+* Shipment Events
+* Shipment Consumer
+* Order Tracking
